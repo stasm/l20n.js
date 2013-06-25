@@ -33,12 +33,17 @@ define(function (require, exports, module) {
           ctx.addResource(scripts[i].textContent);
         }
       }
-      ctx.freeze();
+      // {} immitates an empty manifest; see negotiateLanguages
+      ctx.freeze(negotiateLanguages.bind(null, {}));
     } else {
       var link = headNode.querySelector('link[rel="localization"]');
       if (link) {
         // XXX add errback
-        loadManifest(link.getAttribute('href')).then(ctx.freeze.bind(ctx));
+        loadManifest(link.getAttribute('href'))
+          .then(setupCtxFromManifest)
+          .then(function(manifest) {
+            ctx.freeze(negotiateLanguages.bind(null, manifest));
+          });
       } else {
         console.warn('L20n: No resources found. (Put them above l20n.js.)');
       }
@@ -109,17 +114,27 @@ define(function (require, exports, module) {
     document.l10n = ctx;
   }
 
-  function initializeManifest(manifest) {
+  function negotiateLanguages(manifest, registered) {
+    var io = require('./platform/io');
+    return io.post('http://localhost:8013').then(function(res) {
+      var domains = JSON.parse(res);
+      var extra = domains[ctx.id];
+      var all = registered.concat(extra);
+      // de-duplicate the list of languages
+      all = all.filter(function(elem, pos, arr) {
+        return arr.indexOf(elem) == pos;
+      });
+      var Intl = require('./intl').Intl;
+      // For now we just take nav.language, but we'd prefer to get
+      // a list of locales that the user can read sorted by user's preference
+      return Intl.prioritizeLocales(all, [navigator.language],
+                                    manifest.default_locale);
+    });
+  }
+
+  function setupCtxFromManifest(manifest) {
+    ctx.registerLocales.apply(ctx, manifest.locales);
     var re = /{{\s*locale\s*}}/;
-    var Intl = require('./intl').Intl;
-    /**
-     * For now we just take nav.language, but we'd prefer to get
-     * a list of locales that the user can read sorted by user's preference
-     **/
-    var locList = Intl.prioritizeLocales(manifest.locales,
-                                         [navigator.language],
-                                         manifest.default_locale);
-    ctx.registerLocales.apply(ctx, locList);
     manifest.resources.forEach(function(uri) {
       if (re.test(uri)) {
         ctx.linkResource(uri.replace.bind(uri, re));
@@ -127,6 +142,7 @@ define(function (require, exports, module) {
         ctx.linkResource(uri);
       }
     });
+    return manifest;
   }
 
   function relativeToManifest(manifestUrl, url) {
@@ -155,8 +171,7 @@ define(function (require, exports, module) {
         var manifest = JSON.parse(text);
         manifest.resources = manifest.resources.map(
                                relativeToManifest.bind(this, url));
-        initializeManifest(manifest);
-        deferred.fulfill();
+        deferred.fulfill(manifest);
       }
     );
     return deferred;
