@@ -148,8 +148,14 @@ describe('linkResource(Function) without registerLocales', function() {
     return __dirname + '/fixtures/' + locale + '.lol';
   });
 
-  it('should throw on freeze', function() {
-    ctx.freeze.should.throw(/No registered locales/);
+  it('should throw on freeze', function(done) {
+    ctx.addEventListener('error', function(err) {
+      if (err instanceof Context.Error &&
+          err.message == 'No registered locales') {
+        done();
+      }
+    })
+    ctx.freeze();
   })
 
 });
@@ -181,12 +187,13 @@ describe('linkResource(Function) with registerLocales', function() {
     val.should.have.property('locale', 'en-US')
   })
   it('should throw if changing locale to __none__', function() {
-    ctx.registerLocales.should.throw(/No registered locales/);
-  })
-  it('should throw if changing locale to __none__', function() {
-    (function() {
-      ctx.registerLocales();
-    }).should.throw(/No registered locales/);
+    ctx.addEventListener('error', function(err) {
+      if (err instanceof Context.Error &&
+          err.message == 'No registered locales') {
+        done();
+      }
+    })
+    ctx.registerLocales();
   })
 });
 
