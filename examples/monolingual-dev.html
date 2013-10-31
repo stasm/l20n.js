@@ -39,27 +39,22 @@
     <p data-l10n-id="intro"></p>
 
     <hr>
-    <p data-l10n-id="langNego"></p>
-
-    <hr>
-    <p data-l10n-id="screenWidth"></p>
     <input type="button" data-l10n-id="button">
 
-    <hr>
+    <p data-l10n-id="faq">
+      <a href="http://mozilla.org"></a>
+      <a href="http://firefox.com"></a>
+    </p>
+
+    <p data-l10n-id="inputs">
+      <input type="text" placeholder="will be overwritten by L20n">
+      <input type="submit" value="Send">
+    </p>
+
     <p data-l10n-id="more">
+      <em style="color: green;"></em>
       <a href="http://l20n.org"></a>
     </p>
-    <small data-l10n-id="kthxbye"></small>
-
-    <script>
-      var button = document.querySelector('input');
-      button.addEventListener('click', function insert() {
-        var p = document.createElement('p');
-        p.setAttribute('data-l10n-id', 'currentWidth'); 
-        document.l10n.localizeNode(p); 
-        document.body.insertBefore(p, button.nextSibling);
-      });
-    </script>
 
   </body>
 </html>
