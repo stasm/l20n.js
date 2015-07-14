@@ -1,6 +1,17 @@
 L20n JavaScript API
 ===================
 
+The main abstractions used by the JavaScript API are the `View` and the 
+`Service` classes.  Views are responsible for localizing `document` objects in 
+HTML.  The Service stores the state of the language negotiation and downloaded 
+resources.
+
+If you're using the `web` or the `webcompat` runtime builds (see 
+[docs/html][]), each `document` will have its corresponding `View` created 
+automatically on startup, as `document.l10n`. 
+
+[docs/html]: https://github.com/l20n/l20n.js/blob/master/docs/html.md
+
 ```javascript
 var ctx = L20n.getContext();
 ctx.linkResource('./locales/strings.l20n');
@@ -237,29 +248,6 @@ Currently available event types:
 Remove an event listener previously registered with `addEventListener`.
 
 
-### ctx.updateData(ctxdata: Object)
-
-Update the context data which will be available to all entities in the context.  
-The `ctxdata` is an object which extends the context data per key and per level 
-of hierarchy.  In other words, the following two calls:
-
-```javascript
-ctx.updateData({ user: { name: "Bob" } });
-ctx.updateData({ user: { gender: "masculine" } });
-```
-
-will make the internally-stored context data look like this:
-
-```json
-{
-  "user" : {
-    "name": "Bob",
-    "gender": "masculine"
-  }
-}
-```
-
-
 ### ctx.get(id: String, ctxdata: Object?)
 
 Retrieve a string value of an entity called `id`.
@@ -285,39 +273,6 @@ Returns an object with the following properties:
  - `locale`: locale code of the language the entity is in;  it can be different 
    than the first locale in the current fallback chain if the entity couldn't 
    be evaluated and a fallback translation had to be used.
-
-
-### ctx.localize(ids: Array&lt;String&gt;, callback: Function)
-
-Registers a callback which fires when all entities listed in `ids` have been 
-retrieved.
-
-```javascript
-ctx.localize(['hello', 'about'], function(l10n) {
-  var node = document.querySelector('[data-l10n-id=hello]');
-  node.textContent = l10n.entities.hello.value;
-  node.classList.remove('hidden');
-});
-```
-
-The callback becomes bound to the entities on the `ids` list.  It will be 
-called when the entities become available (asynchronously) or whenever the 
-translation of any of the entities changes.
-
-`localize` should be the preferred way of localizing the UI.
-
-The callback function is passed an `l10n` object with the following properties:
-
-  - `entities`: an object whose keys are the identifiers and value are the 
-    entity objects as returned by `getEntity`,
-  - `reason`: an object with the reason why `callback` was invoked.
-
-The `reason` object can be:
- 
-  - `{ locales: Array<String> }` if `callback` was invoked because of a change 
-    of the current locale (see `requestLocales`),
-  - `{ global: String }` if `callback` was invoked because the value of one of 
-    the globals used in the translation of `ids` has changed.
 
 
 ### ctx.ready(callback: Function)
