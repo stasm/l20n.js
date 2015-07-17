@@ -10,7 +10,7 @@ If you're using the `web` or the `webcompat` runtime builds (see
 [docs/html][]), each `document` will have its corresponding `View` created 
 automatically on startup, as `document.l10n`.
 
-[docs/html]: https://github.com/l20n/l20n.js/blob/master/docs/html.md
+[docs/html]: html.md
 
 
 View (document.l10n)
