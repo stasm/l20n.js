@@ -1,287 +1,128 @@
-L20n JavaScript API
-===================
+L20n.js API
+============
 
-The main abstractions used by the JavaScript API are the `View` and the 
-`Service` classes.  Views are responsible for localizing `document` objects in 
-HTML.  The Service stores the state of the language negotiation and downloaded 
-resources.
+The main abstraction used by the JavaScript API is the `View` class.  Views are 
+responsible for localizing `document` objects in HTML.  Internally, viewes use 
+the `Service` class to store the state of the language negotiation and to cache 
+downloaded resources.
 
 If you're using the `web` or the `webcompat` runtime builds (see 
 [docs/html][]), each `document` will have its corresponding `View` created 
-automatically on startup, as `document.l10n`. 
+automatically on startup, as `document.l10n`.
 
 [docs/html]: https://github.com/l20n/l20n.js/blob/master/docs/html.md
 
+
+View (document.l10n)
+--------------------
+
+### view.ready
+
+A Promise which resolves when the `document` fires `DOMLocalized`.  It's often 
+more convenient to use this than to listen to the event because you don't need 
+to also check if the event has already fired (via the `document.localized` 
+property).
+
 ```javascript
-var ctx = L20n.getContext();
-ctx.linkResource('./locales/strings.l20n');
-ctx.requestLocales();
+view.ready.then(App.init);
 ```
 
-When you freeze the context by calling `requestLocales`, the resource files 
-will be retrieved, parsed and compiled.  You can listen to the `ready` event 
-(emitted by the `Context` instance when all the resources have been compiled) 
-and use `ctx.get` and `ctx.getEntity` to get translations synchronously.
+### view.languages
 
-Alternatively, you can register callbacks to execute when the context is ready 
-(or when globals change and translations need to be updated) with 
-`ctx.localize`.
+A Promise which resolves to the array of the current user-preferred languages.  
+Language objects have the following properties:
 
 ```javascript
-ctx.localize(['hello', 'new'], function(l10n) {
-  var node = document.querySelector('[data-l10n-id=hello]');
-  node.textContent = l10n.entities.hello.value;
-  node.classList.remove('hidden');
-});
+{
+  code: 'ar',
+  dir: 'rtl',
+  src: 'app'
+}
 ```
 
-### ctx.registerLocales(defaultLocale: String?, availableLocales: Array&lt;String&gt;?)
+Language codes follow [BCP 47][].  Direction can be `ltr` or `rtl`.  Source is 
+`app` for languages bundled with the application, `extra` for languages from 
+language packages and `qps` for pseudo-languages.
 
-Register the default locale of the `Context` instance, as well as all other 
-locales available to the `Context` instance before the language negotiation. 
-Locales are referenced by their [BCP 47 language codes][].
-
-[BCP 47 language codes]: http://tools.ietf.org/html/bcp47
+[BCP 47]: http://tools.ietf.org/html/bcp47
 
 ```javascript
-ctx.registerLocales('en-US', ['ar', 'es-AR', 'es-ES', 'en-US', 'fr', 'pl']);
+view.languages.then(
+  langs => console.log(langs));
+// ['pl', 'en-US']
 ```
 
-`defaultLocale` is the original language of the `Context` instance and will be 
-used as the last fallback locale if other locales are registered.  If 
-it is undefined, or if `registerLocales` hasn't been called at all, the 
-`Context` instance will create a special locale called [`i-default`][] to be 
-used as the default.
-
-[`i-default`]: http://www.iana.org/assignments/lang-tags/i-default
-
-`availableLocales` is an array of all locales available to the `Context` 
-instance.  This array (with `defaultLocale` appended to it if it is not already 
-present) will be used to negotiate the fallback chain for the user.  
-
-
-### ctx.registerLocaleNegotiator(negotiator: Function)
-
-Register a function which will be used to negotiate the locales supported by 
-the `Context` instance.  If you don't call this function, L20n will use the 
-built-in `Intl.prioritizeLocales` negotiator.
+You can also trigger the language negotation by assigning an array of language 
+codes.
 
 ```javascript
-ctx.registerLocaleNegotiator(function(available, requested, defLocale) {
-  return Intl.prioritizeLocales(available, requested, defLocale);
-});
-```
-
-`negotiator` is a function which takes the following arguments:
-
- - `available` - all locales available to the `Context` instance,
- - `requested` - locales preferred by the user,
- - `defLocale` - the default locale to be used as the ultimate fallback,
- - `callback` - the function to call when the negotiation completes (useful for 
-   asynchronous negotiators).
-
-It must return an array which is the final fallback chain of locales, or if the 
-negotiation is asynchronous, it must return a falsy value and call the 
-`callback` argument upon completion.
-
-```javascript
-ctx.registerLocaleNegotiator(function(available, requested, defLocale, callback) {
-  YourApp.getAllAvailableLanguages(function(allAvailable) {
-    var fallbackChain = YourApp.intersect(allAvailable, requested); 
-    cb(fallbackChain);
-  });
-});
+view.languages = ['de-DE', 'de', 'en-US'];
 ```
 
 
-### ctx.requestLocales(...requestedLocales: String?)
+### view.format(id, args)
 
-Specify the user's preferred locales for the `Context` instance to negotiate 
-against and freeze the `Context` instance.
+Retrieve the translation corresponding to the `id` identifier.
 
-When a `Context` instance is frozen, no more resources can be added or linked.  
-All IO related to fetching the resource files takes place when a `Context` 
-instance freezes.  When all resources have been fetched, parsed and compiled, 
-the `Context` instance will emit a `ready` event.
+If passed, `args` is a simple hash object with a list of variables that will be 
+interpolated in the value of the translation.
 
-The final list of locales supported by the `Context` instance will be 
-negotiated asynchronously by the `negotiator` registered by 
-`registerLocaleNegotiator`.
+Returns a Promise resolving to the Entity object.
 
 ```javascript
-ctx.requestLocales('pl');
+view.format('hello', { who: 'world' }).then(
+  entity => console.log(entity));
+// -> { value: 'Hello, world!', attrs: null }
 ```
 
+Use this sparingly for one-off messages which don't need to be retranslated 
+when the user changes their language preferences.
+
+
+### view.setAttributes(elem, id, args)
+
+Set the `data-l10n-id` and `data-l10n-args` attributes on DOM elements.
+
+L20n makes use of mutation observers to detect changes to `data-l10n-*`
+attributes and translate elements asynchronously.  `setAttributes` is 
+a convenience method which allows to translate DOM elements declaratively.
+
+You should always prefer to use `data-l10n-id` on elements (statically in HTML 
+or dynamically via `setAttributes`) over manually retrieving translations with 
+`format`.  The use of attributes ensures that the elements can be retranslated 
+when the user changes their language preferences.
+
 ```javascript
-ctx.requestLocales('fr-CA', 'fr');
+view.setAttributes(
+  document.querySelector('#welcome'), 'hello', { who: 'world' });
 ```
 
-If `requestedLocales` argument list is empty or undefined, the default locale 
-from `registerLocales` will be used.
+This will set the following attributes on the `#welcome` element.  L20n's 
+MutationObserver will pick up this change and will localize the element 
+asynchronously.
 
-```javascript
-ctx.requestLocales();
-```
-
-If `registerLocales` hasn't been called, the special `i-default` locale is 
-used, which means that the following minimal code is valid and will result in 
-a fully operational `Context` instance.
-
-```javascript
-var ctx = L20n.getContext();
-ctx.addResource('<hello "Hello, world!">');
-ctx.requestLocales();
-```
-
-`requestLocales` can be called multiple times after the `Context` instance 
-emitted the `ready` event, in order to change the current language fallback 
-chain, for instance if requested by the user.
-
-
-### ctx.supportedLocales
-
-A read-only property which holds the current fallback chain of locales which 
-was negotiated between all the available locales, the default locale and the 
-user's preferred locales.
-
-```javascript
-ctx.registerLocales('en-US', ['en-US', 'fr', 'pl']);
-ctx.requestLocales('fr-CA', 'fr');
-ctx.ready(function() {
-  // ctx.supportedLocales == ['fr'];
-});
+```html
+<p id='welcome' data-l10n-id='hello' data-l10n-args='{"who": "world"}'></p> 
 ```
 
 
-### ctx.addResource(text: String)
+### view.getAttributes(elem)
 
-Add a string as the content of a resource to the Context instance.  The 
-resource is added to all registered locales.
+Get the `data-l10n-*` attributes from DOM elements.
 
 ```javascript
-ctx.addResource('<hello "Hello, world!">');
+view.getAttributes(
+  document.querySelector('#welcome'));
+// -> { id: 'hello', args: { who: 'world' } }
 ```
 
 
-### ctx.linkResource(uri: String)
+### view.translateFragment(frag)
 
-Add a resource identified by a URL to the Context instance.  The resource is 
-added to all registered locales.
+Translate a DOM node or fragment asynchronously.
 
-```javascript
-ctx.linkResource('../locale/app.lol');
-```
+You can manually trigger translation (or re-translation) of a DOM fragment with 
+`translateFragment`.  Use the `data-l10n-id` and `data-l10n-args` attributes to 
+mark up the DOM with information about which translations to use.
 
-
-
-### ctx.linkResource(template: Function)
-
-Add a resource identified by a URL to the Context instance.  The URL is 
-constructed dynamically when you call `requestLocales`.  The function passed to 
-`linkResource` (called a _template function_) takes one argument which is the 
-code of the current locale, which needs to be first registered with 
-`registerLocales`.
-
-```javascript
-ctx.linkResource(function(locale) {
-  return '../locales/' + locale + '/strings.lol';
-});
-```
-
-The resource is added to all registered locales.  If there are no registered 
-locales (see `registerLocales`), the default `i-default` locale is used.  In 
-this case, `addResource(String)` and `linkResource(String)` might be better 
-suited for adding resources.
-
-
-### ctx.addEventListener(event: String, callback: Function)
-
-Register an event handler on the Context instance.
-
-Currently available event types:
-
- - `ready` - fired when all resources are available and the `Context` instance 
-   is ready to be used.  This event is also fired after each change to locale 
-   order (retranslation).
-
- - `error` - fired when an error occurs which prevents the `Context` instance 
-   from working correctly or when the existing translations are buggy.  The 
-   error object is passed as the first argument to `callback`.  These errors 
-   include:
-
-   - native JavaScript errors (`TypeError`, `ReferenceError` etc.),
-
-   - `Context.RuntimeError`, when an entity is missing or broken in all 
-     supported locales;  in this case, L20n will show the the best available 
-     fallback of the requested entity in the UI:  the source string as found in 
-     the resource, or the identifier.
-
-   - `Context.TranslationError`, when the translation is present but broken 
-     in one of supported locales;  the `Context` instance will try to retrieve 
-     a fallback translation from the next locale in the fallback chain,
-
-   - `Parser.Error`, when L20n is unable to parse the syntax of a resource; 
-     this might result in entities being broken which in turn can lead to above 
-     error being emitted.
-
- - `warning` - fired when a less serious error occurs from which the `Context` 
-   instance can recover gracefully and try to fetch a translations from 
-   a fallback locale.  The error object is passed as the first argument to 
-   `callback` and can be one of the following:
-
-   - `Context.Error`, when there are problems with setting up resources (e.g. 
-     a 404 error when fetching a resource file, or recursive `import` 
-     statements in resource files),
-
-   - `Context.TranslationError`, when there is a missing translation 
-     in one of supported locales;  the `Context` instance will try to retrieve 
-     a fallback translation from the next locale in the fallback chain,
-
-   - `Compiler.Error`, when L20n is unable to evaluate an entity to a string; 
-     there are two types of errors in this category: `Compiler.ValueError`, 
-     when L20n can still try to use the literal source string of the entity as 
-     fallback, and `Compiler.IndexError` otherwise.
-
-
-### ctx.removeEventListener(event: String, callback: Function)
-
-Remove an event listener previously registered with `addEventListener`.
-
-
-### ctx.get(id: String, ctxdata: Object?)
-
-Retrieve a string value of an entity called `id`.
-
-If passed, `ctxdata` is a simple hash object with a list of variables that
-extend the context data available for the evaluation of this entity.
-
-Returns a string.
-
-
-### ctx.getEntity(id: String, ctxdata: Object?)
-
-Retrieve an object with data evaluated from an entity called `id`.
-
-If passed, `ctxdata` is a simple hash object with a list of variables that
-extend the context data available for the evaluation of this entity.
-
-Returns an object with the following properties:
-
- - `value`: the string value of the entity,
- - `attributes`: an object of evaluated attributes of the entity,
- - `globals`: a list of global variables used while evaluating the entity,
- - `locale`: locale code of the language the entity is in;  it can be different 
-   than the first locale in the current fallback chain if the entity couldn't 
-   be evaluated and a fallback translation had to be used.
-
-
-### ctx.ready(callback: Function)
-
-Fires the function passed as argument as soon as the context is available.
-
-If the context is available when the function is called, it fires the callback
-instantly. 
-Otherwise it sets the event listener and fire as soon as the context is ready.
-
-After that, each time locale list is modified (retranslation case) the callback 
-will be executed.
+Returns a Promise.

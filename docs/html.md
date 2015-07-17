@@ -100,11 +100,12 @@ Given the following translation:
 <hello "Hello, {{ $username }}!">
 ```
 
-…the result will be (`data-` attribtues omitted for clarity):
+…the result will be as follows (`data-` attributes omitted for 
+clarity):
 
 ```html
 <h1>Hello, Mary!</h1>
 ```
 
 When all DOM nodes are localized, `document` will fire a `DOMLocalized` 
-event.
+event and will set its `localized` property to `true`.
