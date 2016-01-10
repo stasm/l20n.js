@@ -77,10 +77,11 @@ export function translateMutations(view, langs, mutations) {
     return;
   }
 
-  const elements = [];
+  let elements = [];
 
   targets.forEach(target => target.childElementCount ?
-      elements.concat(getTranslatables(target)) : elements.push(target));
+      (elements = elements.concat(getTranslatables(target))) :
+      elements.push(target));
 
   Promise.all(
     elements.map(elem => getElementTranslation(view, langs, elem))).then(
